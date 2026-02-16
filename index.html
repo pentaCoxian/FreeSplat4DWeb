@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeSplat4D WebXR Viewer</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="loading-content">
+            <h2>FreeSplat4D Viewer</h2>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="loading-status">Initializing...</p>
+        </div>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div id="scene-carousel">
+            <button id="prev-scene" title="Previous scene"><svg width="10" height="12" viewBox="0 0 10 12"><path d="M8 0L0 6l8 6z" fill="currentColor"/></svg></button>
+            <span id="scene-label">Loading...</span>
+            <button id="next-scene" title="Next scene"><svg width="10" height="12" viewBox="0 0 10 12"><path d="M2 0l8 6-8 6z" fill="currentColor"/></svg></button>
+        </div>
+        <div id="time-controls">
+            <button id="play-btn" title="Play/Pause"><svg width="12" height="14" viewBox="0 0 12 14"><path d="M2 0l10 7-10 7z" fill="currentColor"/></svg></button>
+            <input type="range" id="time-slider" min="0" max="1000" value="500" step="1">
+            <span id="time-display">t=0.500</span>
+            <label id="speed-control">
+                <span id="speed-label">0.3x</span>
+                <input type="range" id="speed-slider" min="10" max="300" value="30" step="10">
+            </label>
+        </div>
+        <div id="stats">
+            <span id="fps-display">-- FPS</span>
+            <span id="splat-count">-- splats</span>
+        </div>
+    </div>
+
+    <div id="vr-container"></div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

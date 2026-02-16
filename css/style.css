@@ -1,0 +1,245 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow: hidden;
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #fff;
+}
+
+canvas {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+}
+
+/* Loading overlay */
+#loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: opacity 0.3s;
+}
+
+#loading-overlay.hidden {
+    display: none;
+}
+
+.loading-content {
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+}
+
+.loading-content h2 {
+    font-size: 1.4em;
+    margin-bottom: 20px;
+    font-weight: 300;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #4af;
+    width: 0%;
+    transition: width 0.1s;
+}
+
+#loading-status {
+    font-size: 0.85em;
+    color: #888;
+}
+
+/* HUD */
+#hud {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 600px;
+    width: calc(100% - 16px);
+}
+
+#hud.hidden {
+    display: none;
+}
+
+#scene-carousel {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 6px 16px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+#scene-carousel button {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#scene-carousel button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#scene-carousel button:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+#scene-label {
+    font-size: 0.85em;
+    font-family: monospace;
+    min-width: 80px;
+    text-align: center;
+}
+
+#time-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 16px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+#play-btn {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#play-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#time-slider {
+    accent-color: #4af;
+    flex: 1;
+    min-width: 0;
+}
+
+#time-display {
+    font-size: 0.8em;
+    font-family: monospace;
+    min-width: 60px;
+}
+
+#speed-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    padding-left: 12px;
+}
+
+#speed-label {
+    font-size: 0.8em;
+    font-family: monospace;
+    min-width: 36px;
+}
+
+#speed-slider {
+    width: 80px;
+    accent-color: #4af;
+}
+
+#stats {
+    display: flex;
+    gap: 16px;
+    font-size: 0.75em;
+    color: #888;
+    font-family: monospace;
+}
+
+/* Responsive: narrow screens (phones) */
+@media (max-width: 480px) {
+    #hud {
+        left: 0;
+        right: 0;
+        transform: none;
+        bottom: 12px;
+    }
+
+    #scene-carousel,
+    #time-controls {
+        width: 100%;
+    }
+
+    #time-controls {
+        flex-wrap: wrap;
+        padding: 6px 10px;
+        gap: 6px;
+    }
+
+    #time-slider {
+        width: 100%;
+        flex: none;
+        order: 10;
+    }
+
+    #speed-control {
+        margin-left: 0;
+        border-left: none;
+        padding-left: 0;
+    }
+
+    #speed-slider {
+        width: 60px;
+    }
+
+    #stats {
+        gap: 10px;
+    }
+}
+
+/* VR button container */
+#vr-container {
+    position: fixed;
+    bottom: 130px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+}
