@@ -1,5 +1,3 @@
 node_modules/
 dist/
-public/**/*.ply
-public/**/*.bin
 *.pem
