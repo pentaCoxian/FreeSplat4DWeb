@@ -39,7 +39,7 @@ export class VRControls {
      * @param {number} timestamp
      * @param {XRFrame|null} frame
      */
-    update(timestamp, frame) {
+    update(_timestamp, frame) {
         if (!frame) return;
 
         const session = this.renderer.xr.getSession();
@@ -116,7 +116,7 @@ export class VRControls {
 }
 
 const FPV_DEADZONE = 0.15;
-const JOYSTICK_RADIUS = 50;
+const JOYSTICK_RADIUS = 60;
 const JOYSTICK_COLOR = 'rgba(255,255,255,0.25)';
 const JOYSTICK_THUMB_COLOR = 'rgba(255,255,255,0.5)';
 
@@ -124,8 +124,13 @@ const JOYSTICK_THUMB_COLOR = 'rgba(255,255,255,0.5)';
  * First-person view controls for desktop + mobile.
  *
  * Input sources (all feed into the same movement/look system):
- *   Desktop:  WASD/QE + pointer-lock mouse look + gamepad
+ *   Desktop:  WASD/QE + virtual joystick mouse-drag + gamepad
+ *             (click to engage pointer-lock mouse look as alternative)
  *   Mobile:   Virtual dual joysticks (left=move, right=look)
+ *
+ * Virtual joysticks are always shown. On desktop, left-mouse drag on the
+ * left half controls movement and on the right half controls look.
+ * Pointer-lock mouse look is also available on desktop (click to engage).
  */
 export class FPVControls {
     constructor(camera, domElement, options = {}) {
@@ -144,10 +149,12 @@ export class FPVControls {
         this._yaw = camera.rotation.y;
         this._pitch = camera.rotation.x;
 
-        // Touch joystick state
+        // Joystick state — shared between touch and mouse drag
         this._hasTouch = 'ontouchstart' in window;
         this._moveTouch = null; // { id, startX, startY, currentX, currentY }
         this._lookTouch = null;
+        this._moveMouse = null; // same shape, driven by mouse drag on desktop
+        this._lookMouse = null;
         this._joystickCanvas = null;
         this._joystickCtx = null;
 
@@ -162,9 +169,8 @@ export class FPVControls {
         domElement.addEventListener('click', this._onClick);
         document.addEventListener('mousemove', this._onMouseMove);
 
-        if (this._hasTouch) {
-            this._setupTouchJoysticks();
-        }
+        // Always set up joystick overlay (touch + mouse drag)
+        this._setupJoystickOverlay();
     }
 
     _handleKeyDown(e) {
@@ -176,6 +182,8 @@ export class FPVControls {
     }
 
     _handleClick() {
+        // On desktop (no touch), clicking outside the joystick overlay engages
+        // pointer-lock for traditional mouse look (alternative to joystick drag).
         if (!this.enabled || this._hasTouch) return;
         this.domElement.requestPointerLock();
     }
@@ -188,9 +196,9 @@ export class FPVControls {
         this._pitch = Math.max(-Math.PI * 85 / 180, Math.min(Math.PI * 85 / 180, this._pitch));
     }
 
-    // --- Touch virtual joysticks ---
+    // --- Joystick overlay (touch + mouse drag) ---
 
-    _setupTouchJoysticks() {
+    _setupJoystickOverlay() {
         const canvas = document.createElement('canvas');
         canvas.id = 'joystick-overlay';
         canvas.style.cssText = 'position:fixed;inset:0;z-index:40;touch-action:none;';
@@ -206,11 +214,20 @@ export class FPVControls {
         window.addEventListener('resize', resize);
         this._onJoystickResize = resize;
 
+        // Touch events
         canvas.addEventListener('touchstart', (e) => this._onTouchStart(e), { passive: false });
         canvas.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: false });
         canvas.addEventListener('touchend', (e) => this._onTouchEnd(e));
         canvas.addEventListener('touchcancel', (e) => this._onTouchEnd(e));
+
+        // Mouse drag events (desktop joystick)
+        canvas.addEventListener('mousedown', (e) => this._onMouseDown(e));
+        canvas.addEventListener('mousemove', (e) => this._onMouseDrag(e));
+        canvas.addEventListener('mouseup', (e) => this._onMouseUp(e));
+        canvas.addEventListener('mouseleave', (e) => this._onMouseUp(e));
     }
+
+    // --- Touch handlers ---
 
     _onTouchStart(e) {
         e.preventDefault();
@@ -252,10 +269,49 @@ export class FPVControls {
         }
     }
 
-    _getJoystickAxes(touchState) {
-        if (!touchState) return { x: 0, y: 0 };
-        let dx = (touchState.currentX - touchState.startX) / JOYSTICK_RADIUS;
-        let dy = (touchState.currentY - touchState.startY) / JOYSTICK_RADIUS;
+    // --- Mouse drag handlers (desktop joystick) ---
+
+    _onMouseDown(e) {
+        if (e.button !== 0) return; // left button only
+        // If pointer is locked, let the pointer-lock handler take over
+        if (document.pointerLockElement === this.domElement) return;
+        e.preventDefault();
+
+        const midX = window.innerWidth / 2;
+        // Ignore clicks in the bottom HUD area
+        if (e.clientY > window.innerHeight - 120) return;
+
+        if (e.clientX < midX && !this._moveMouse) {
+            this._moveMouse = { startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY };
+        } else if (e.clientX >= midX && !this._lookMouse) {
+            this._lookMouse = { startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY };
+        }
+    }
+
+    _onMouseDrag(e) {
+        if (document.pointerLockElement === this.domElement) return;
+        if (this._moveMouse) {
+            this._moveMouse.currentX = e.clientX;
+            this._moveMouse.currentY = e.clientY;
+        }
+        if (this._lookMouse) {
+            this._lookMouse.currentX = e.clientX;
+            this._lookMouse.currentY = e.clientY;
+        }
+    }
+
+    _onMouseUp(e) {
+        if (e.button !== 0 && e.type !== 'mouseleave') return;
+        this._moveMouse = null;
+        this._lookMouse = null;
+    }
+
+    // --- Shared joystick utilities ---
+
+    _getJoystickAxes(state) {
+        if (!state) return { x: 0, y: 0 };
+        let dx = (state.currentX - state.startX) / JOYSTICK_RADIUS;
+        let dy = (state.currentY - state.startY) / JOYSTICK_RADIUS;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len > 1) { dx /= len; dy /= len; }
         return { x: dx, y: dy };
@@ -266,26 +322,28 @@ export class FPVControls {
         const canvas = this._joystickCanvas;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const drawStick = (touch) => {
-            if (!touch) return;
-            const axes = this._getJoystickAxes(touch);
+        const drawStick = (state) => {
+            if (!state) return;
+            const axes = this._getJoystickAxes(state);
             // Outer ring
             ctx.beginPath();
-            ctx.arc(touch.startX, touch.startY, JOYSTICK_RADIUS, 0, Math.PI * 2);
+            ctx.arc(state.startX, state.startY, JOYSTICK_RADIUS, 0, Math.PI * 2);
             ctx.strokeStyle = JOYSTICK_COLOR;
             ctx.lineWidth = 2;
             ctx.stroke();
             // Thumb
-            const tx = touch.startX + axes.x * JOYSTICK_RADIUS;
-            const ty = touch.startY + axes.y * JOYSTICK_RADIUS;
+            const tx = state.startX + axes.x * JOYSTICK_RADIUS;
+            const ty = state.startY + axes.y * JOYSTICK_RADIUS;
             ctx.beginPath();
-            ctx.arc(tx, ty, 20, 0, Math.PI * 2);
+            ctx.arc(tx, ty, 22, 0, Math.PI * 2);
             ctx.fillStyle = JOYSTICK_THUMB_COLOR;
             ctx.fill();
         };
 
         drawStick(this._moveTouch);
         drawStick(this._lookTouch);
+        drawStick(this._moveMouse);
+        drawStick(this._lookMouse);
     }
 
     // --- Gamepad ---
@@ -333,18 +391,16 @@ export class FPVControls {
             moveY += rt - lt;
         }
 
-        // Touch joysticks
-        if (this._hasTouch) {
-            const moveAxes = this._getJoystickAxes(this._moveTouch);
-            const lookAxes = this._getJoystickAxes(this._lookTouch);
-            moveX += moveAxes.x;
-            moveZ += moveAxes.y;
-            lookX += lookAxes.x * 0.5;
-            lookY += lookAxes.y * 0.5;
-            this._drawJoysticks();
-        }
+        // Virtual joysticks (touch + mouse drag on desktop)
+        const moveAxes = this._getJoystickAxes(this._moveTouch ?? this._moveMouse);
+        const lookAxes = this._getJoystickAxes(this._lookTouch ?? this._lookMouse);
+        moveX += moveAxes.x;
+        moveZ += moveAxes.y;
+        lookX += lookAxes.x * 0.5;
+        lookY += lookAxes.y * 0.5;
+        this._drawJoysticks();
 
-        // Apply look (gamepad/touch contribute to yaw/pitch)
+        // Apply look (gamepad/joystick contribute to yaw/pitch)
         this._yaw -= lookX * this.lookSpeed * 30;
         this._pitch -= lookY * this.lookSpeed * 30;
         this._pitch = Math.max(-Math.PI * 85 / 180, Math.min(Math.PI * 85 / 180, this._pitch));
