@@ -44,19 +44,21 @@ function scenesPlugin() {
             });
         },
         generateBundle() {
-            const scenes = discoverScenes();
-            this.emitFile({
-                type: 'asset',
-                fileName: 'scenes.json',
-                source: JSON.stringify(scenes),
-            });
+            // Don't emit a local scenes.json in production builds —
+            // the runtime fetches the manifest from R2 instead.
         },
     };
 }
 
+const isBuild = process.env.NODE_ENV === 'production' || process.argv.includes('build');
+
 export default defineConfig({
     root: '.',
     base: './',
+    // During build, use an empty public dir so large .ply/.bin assets are
+    // never copied into dist/ (they're served from Cloudflare R2 instead).
+    // During dev, use the real public/ dir for local testing.
+    publicDir: isBuild ? false : 'public',
     plugins: [scenesPlugin()],
     server: {
         host: true,
