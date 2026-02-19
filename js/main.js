@@ -24,13 +24,17 @@ async function discoverScenes() {
             if (contentType.includes('application/json')) {
                 const manifest = await resp.json();
                 // Resolve relative paths in the manifest against the R2 base URL
-                return manifest.map(entry => ({
-                    name: entry.name,
-                    ply: entry.ply.startsWith('http') ? entry.ply : `${R2_BASE_URL}/${entry.ply}`,
-                    temporal: entry.temporal
-                        ? (entry.temporal.startsWith('http') ? entry.temporal : `${R2_BASE_URL}/${entry.temporal}`)
-                        : `${R2_BASE_URL}/${entry.ply.replace('.ply', '.4d.bin')}`,
-                }));
+                return manifest.map(entry => {
+                    const splatUrl = entry.url || entry.ply;
+                    const resolvedSplat = splatUrl.startsWith('http') ? splatUrl : `${R2_BASE_URL}/${splatUrl}`;
+                    return {
+                        name: entry.name,
+                        ply: resolvedSplat,
+                        temporal: entry.temporal
+                            ? (entry.temporal.startsWith('http') ? entry.temporal : `${R2_BASE_URL}/${entry.temporal}`)
+                            : resolvedSplat.replace(/\.(spz|ply)$/, '.4d.bin'),
+                    };
+                });
             }
         }
     } catch (_) { /* no R2 manifest, fall through */ }
@@ -48,21 +52,23 @@ async function discoverScenes() {
 
     // 3. Probe R2 data folders: data, data2, data3, ... until first miss
     const found = [];
-    const isPly = async (url) => {
+    const isSpz = async (url) => {
         try {
-            const resp = await fetch(url, { headers: { Range: 'bytes=0-3' } });
+            const resp = await fetch(url, { headers: { Range: 'bytes=0-1' } });
             if (!resp.ok && resp.status !== 206) return false;
-            const text = await resp.text();
-            return text.startsWith('ply');
+            const buf = await resp.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            // SPZ files are gzip-compressed: magic bytes 0x1f 0x8b
+            return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
         } catch (_) { return false; }
     };
 
     for (let i = 1; ; i++) {
         const folder = i === 1 ? 'data' : `data${i}`;
-        if (!await isPly(`${R2_BASE_URL}/${folder}/scene.ply`)) break;
+        if (!await isSpz(`${R2_BASE_URL}/${folder}/scene.spz`)) break;
         found.push({
             name: folder,
-            ply: `${R2_BASE_URL}/${folder}/scene.ply`,
+            ply: `${R2_BASE_URL}/${folder}/scene.spz`,
             temporal: `${R2_BASE_URL}/${folder}/scene.4d.bin`,
         });
     }
@@ -135,13 +141,13 @@ async function init() {
 
     // URL params can override scene selection
     const params = new URLSearchParams(window.location.search);
-    const plyParam = params.get('ply');
-    if (plyParam) {
-        scenes = [{ name: 'custom', ply: plyParam, temporal: params.get('temporal') || plyParam.replace('.ply', '.4d.bin') }];
+    const splatParam = params.get('url') || params.get('ply');
+    if (splatParam) {
+        scenes = [{ name: 'custom', ply: splatParam, temporal: params.get('temporal') || splatParam.replace(/\.(spz|ply)$/, '.4d.bin') }];
     }
 
     if (scenes.length === 0) {
-        scenes = [{ name: 'data', ply: `${R2_BASE_URL}/data/scene.ply`, temporal: `${R2_BASE_URL}/data/scene.4d.bin` }];
+        scenes = [{ name: 'data', ply: `${R2_BASE_URL}/data/scene.spz`, temporal: `${R2_BASE_URL}/data/scene.4d.bin` }];
     }
 
     // Set up carousel
@@ -235,9 +241,9 @@ async function loadScene(plyFile, temporalFile) {
     const splatCount = splatMesh.packedSplats?.numSplats ?? 0;
     ui.setSplatCount(splatCount);
 
-    // Validate splat counts match between PLY and temporal data
+    // Validate splat counts match between SPZ and temporal data
     if (temporalData && splatCount > 0 && temporalData.splatCount !== splatCount) {
-        console.warn(`Splat count mismatch! PLY: ${splatCount}, temporal: ${temporalData.splatCount}`);
+        console.warn(`Splat count mismatch! SPZ: ${splatCount}, temporal: ${temporalData.splatCount}`);
     }
 
     // Step 4: Bind the Dyno handle to the mesh so uniform updates invalidate

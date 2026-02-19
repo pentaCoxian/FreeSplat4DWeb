@@ -23,7 +23,7 @@ python scripts/export_webxr.py results/ckpts/ckpt_9999.pt webxr/public/data/ \
 ```
 
 This produces two files in the output directory:
-- `scene.ply` — Standard 3DGS PLY (positions at t=0.5, compatible with any splat viewer)
+- `scene.spz` — SPZ compressed Gaussian splat file (positions at t=0.5, ~10x smaller than PLY)
 - `scene.4d.bin` — Temporal sidecar (per-splat times, durations, velocities)
 
 #### Export Options
@@ -75,7 +75,7 @@ Open `http://localhost:8080` in a browser (or the local IP for VR headsets).
 Pass file paths via URL parameters:
 
 ```
-https://192.168.100.58:8080/?ply=data/scene.ply&temporal=data/scene.4d.bin
+https://192.168.100.58:8080/?url=data/scene.spz&temporal=data/scene.4d.bin
 ```
 
 Or symlink an external data directory:
@@ -100,7 +100,7 @@ webxr/
 ├── vite.config.js      # Vite bundler config
 └── public/             # Static assets served by Vite
     └── data/           # Exported scene files (gitignored)
-        ├── scene.ply
+        ├── scene.spz
         └── scene.4d.bin
 ```
 
@@ -108,8 +108,8 @@ webxr/
 
 ### Rendering Pipeline
 
-1. **Export** converts the `.pt` checkpoint to standard 3DGS PLY + temporal sidecar, applying a COLMAP-to-OpenGL coordinate transform (180 deg rotation around X)
-2. **SparkJS** loads the PLY and renders Gaussian splats with GPU-accelerated sorting
+1. **Export** converts the `.pt` checkpoint to SPZ compressed splat file + temporal sidecar, applying a COLMAP-to-OpenGL coordinate transform (180 deg rotation around X)
+2. **SparkJS** loads the SPZ and renders Gaussian splats with GPU-accelerated sorting
 3. **Dyno objectModifier** runs a custom shader graph per-splat each frame:
    - Samples temporal parameters (time, duration, velocity) from DataTextures
    - Computes animated position: `pos(t) = center + velocity * (t - 0.5)`
