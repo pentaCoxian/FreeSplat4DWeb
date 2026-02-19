@@ -5,6 +5,9 @@ import { buildDynoModifier, createCPUFallback, TemporalController } from './temp
 import { VRControls, FPVControls } from './controls.js';
 import { UI } from './ui.js';
 
+// Base URL for Cloudflare R2 bucket (no trailing slash)
+const R2_BASE_URL = 'https://r2.pentacoxian.dev/public';
+
 let renderer, scene, camera, cameraRig, controls, sparkRenderer;
 let splatMesh, temporalCtrl, vrControls, ui;
 let clock;
@@ -13,7 +16,26 @@ let clock;
 let scenes = [];
 
 async function discoverScenes() {
-    // Try to fetch a manifest file first, fall back to probing known folders
+    // 1. Try R2 manifest first
+    try {
+        const resp = await fetch(`${R2_BASE_URL}/scenes.json`);
+        if (resp.ok) {
+            const contentType = resp.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                const manifest = await resp.json();
+                // Resolve relative paths in the manifest against the R2 base URL
+                return manifest.map(entry => ({
+                    name: entry.name,
+                    ply: entry.ply.startsWith('http') ? entry.ply : `${R2_BASE_URL}/${entry.ply}`,
+                    temporal: entry.temporal
+                        ? (entry.temporal.startsWith('http') ? entry.temporal : `${R2_BASE_URL}/${entry.temporal}`)
+                        : `${R2_BASE_URL}/${entry.ply.replace('.ply', '.4d.bin')}`,
+                }));
+            }
+        }
+    } catch (_) { /* no R2 manifest, fall through */ }
+
+    // 2. Try local manifest
     try {
         const resp = await fetch('scenes.json');
         if (resp.ok) {
@@ -22,11 +44,9 @@ async function discoverScenes() {
                 return await resp.json();
             }
         }
-    } catch (_) { /* no manifest, probe instead */ }
+    } catch (_) { /* no local manifest, probe R2 instead */ }
 
-    // Probe data folders: data, data2, data3, ... until first miss
-    // Use Range header to fetch first bytes and verify it's a real PLY file
-    // (HEAD alone can return 200 for SPA fallback HTML pages)
+    // 3. Probe R2 data folders: data, data2, data3, ... until first miss
     const found = [];
     const isPly = async (url) => {
         try {
@@ -39,11 +59,11 @@ async function discoverScenes() {
 
     for (let i = 1; ; i++) {
         const folder = i === 1 ? 'data' : `data${i}`;
-        if (!await isPly(`${folder}/scene.ply`)) break;
+        if (!await isPly(`${R2_BASE_URL}/${folder}/scene.ply`)) break;
         found.push({
             name: folder,
-            ply: `${folder}/scene.ply`,
-            temporal: `${folder}/scene.4d.bin`,
+            ply: `${R2_BASE_URL}/${folder}/scene.ply`,
+            temporal: `${R2_BASE_URL}/${folder}/scene.4d.bin`,
         });
     }
 
@@ -121,7 +141,7 @@ async function init() {
     }
 
     if (scenes.length === 0) {
-        scenes = [{ name: 'data', ply: 'data/scene.ply', temporal: 'data/scene.4d.bin' }];
+        scenes = [{ name: 'data', ply: `${R2_BASE_URL}/data/scene.ply`, temporal: `${R2_BASE_URL}/data/scene.4d.bin` }];
     }
 
     // Set up carousel
